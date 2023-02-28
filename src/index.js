@@ -16,58 +16,67 @@ let page = 1;
 let request = null;
 let isReseivingData = false;
 
-el.searchForm.addEventListener('submit', handleRenderMarkup);
-
-function handleRenderMarkup(e) {
+const onSubmit = async e => {
   e.preventDefault();
+
   request = e.target.elements.searchQuery.value;
   page = 1;
 
-  reseivingData(request, page).then(data => {
-    if (data.total === 0) {
-      Notify.info(
-        'Sorry, there are no images matching your search query. Please try again.'
-      );
-      return;
-    }
+  setScrollHandler();
 
-    Notify.success(`We found ${data.totalHits} pictures`);
+  const data = await reseivingData(request, page);
 
-    window.addEventListener('scroll', throttle(handleRefreshPageByScroll, 500));
+  if (data.total === 0) {
+    Notify.info(
+      'Sorry, there are no images matching your search query. Please try again.'
+    );
+    return;
+  }
 
-    el.gallery.innerHTML = renderMarkup(data);
+  Notify.success(`We found ${data.totalHits} pictures`);
 
-    lightbox.refresh();
-    console.log(data);
-  });
+  el.gallery.innerHTML = renderMarkup(data);
+
+  lightbox.refresh();
+  console.log(data);
 
   e.target.reset();
-}
+};
 
-function handleRefreshPageByScroll(e) {
+const handleRefreshPageByScroll = throttle(async e => {
   const scrollHeight = e.target.documentElement.scrollHeight;
   const scrollTop = e.target.documentElement.scrollTop;
   const clientHeight = e.target.documentElement.clientHeight;
   const scrollLeft = scrollHeight - scrollTop - clientHeight;
-
-  if (scrollLeft < 100 && !isReseivingData) {
+  if (scrollLeft < 300 && !isReseivingData) {
     page += 1;
     isReseivingData = true;
 
-    reseivingData(request, page).then(data => {
-      if (Math.ceil(data.totalHits / 40) === page - 1) {
-        Notify.failure(
-          "We're sorry, but you've reached the end of search results."
-        );
+    const data = await reseivingData(request, page);
 
-        // window.removeEventListener('scroll', handleRefreshPageByScroll);
-        // return;
-      }
+    if (Math.ceil(data.totalHits / 40) === page - 1) {
+      Notify.failure(
+        "We're sorry, but you've reached the end of search results."
+      );
 
-      el.gallery.insertAdjacentHTML('beforeend', renderMarkup(data));
-      lightbox.refresh();
       isReseivingData = false;
-      console.log(data);
-    });
+
+      return removeScrollHandelr();
+    }
+
+    el.gallery.insertAdjacentHTML('beforeend', renderMarkup(data));
+    lightbox.refresh();
+    isReseivingData = false;
+    console.log(data);
   }
+}, 500);
+
+el.searchForm.addEventListener('submit', onSubmit);
+
+function setScrollHandler() {
+  window.addEventListener('scroll', handleRefreshPageByScroll);
+}
+
+function removeScrollHandelr() {
+  window.removeEventListener('scroll', handleRefreshPageByScroll);
 }
