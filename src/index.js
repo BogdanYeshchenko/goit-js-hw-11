@@ -1,6 +1,7 @@
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
+import throttle from 'lodash.throttle';
 
 import { el } from './js-module/elements';
 import { reseivingData } from './js-module/reseiving-data';
@@ -11,33 +12,62 @@ const lightbox = new SimpleLightbox('.gallery a', {
   captionDelay: 250,
 });
 
+let page = 1;
+let request = null;
+let isReseivingData = false;
+
 el.searchForm.addEventListener('submit', handleRenderMarkup);
-window.addEventListener('scroll', handleRefreshPageByScroll);
-
-function handleRefreshPageByScroll(e) {
-  //   console.dir(e.target.documentElement);
-
-  const scrollHeight = e.target.documentElement.scrollHeight;
-  const scrollTop = e.target.documentElement.scrollTop;
-  const clientHeight = e.target.documentElement.clientHeight;
-
-  console.log(scrollHeight - scrollTop - clientHeight);
-}
 
 function handleRenderMarkup(e) {
   e.preventDefault();
-  const request = e.target.elements.searchQuery.value;
+  request = e.target.elements.searchQuery.value;
+  page = 1;
 
-  reseivingData(request).then(data => {
+  reseivingData(request, page).then(data => {
     if (data.total === 0) {
       Notify.info(
         'Sorry, there are no images matching your search query. Please try again.'
       );
+      return;
     }
-    renderMarkup(data);
+
+    Notify.success(`We found ${data.totalHits} pictures`);
+
+    window.addEventListener('scroll', throttle(handleRefreshPageByScroll, 500));
+
+    el.gallery.innerHTML = renderMarkup(data);
+
     lightbox.refresh();
     console.log(data);
   });
 
   e.target.reset();
+}
+
+function handleRefreshPageByScroll(e) {
+  const scrollHeight = e.target.documentElement.scrollHeight;
+  const scrollTop = e.target.documentElement.scrollTop;
+  const clientHeight = e.target.documentElement.clientHeight;
+  const scrollLeft = scrollHeight - scrollTop - clientHeight;
+
+  if (scrollLeft < 100 && !isReseivingData) {
+    page += 1;
+    isReseivingData = true;
+
+    reseivingData(request, page).then(data => {
+      if (Math.ceil(data.totalHits / 40) === page - 1) {
+        Notify.failure(
+          "We're sorry, but you've reached the end of search results."
+        );
+
+        // window.removeEventListener('scroll', handleRefreshPageByScroll);
+        // return;
+      }
+
+      el.gallery.insertAdjacentHTML('beforeend', renderMarkup(data));
+      lightbox.refresh();
+      isReseivingData = false;
+      console.log(data);
+    });
+  }
 }

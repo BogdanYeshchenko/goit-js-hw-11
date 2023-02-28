@@ -27,5 +27,5 @@ export function renderMarkup({ hits }) {
     )
     .join('');
 
-  el.gallery.innerHTML = markup;
+  return markup;
 }
